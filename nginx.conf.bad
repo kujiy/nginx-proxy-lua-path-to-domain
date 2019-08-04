@@ -1,0 +1,103 @@
+worker_processes  1;
+error_log logs/error.log;
+events {
+        worker_connections 1024;
+}
+http {
+    upstream my_backend {
+        #server localhost:80; 
+        #server 127.0.0.1:80; 
+        server 192.168.56.105;
+    }
+
+    server {
+       listen 8080;
+#       root  /usr/share/nginx/html/;
+       rewrite_log on;
+
+#         proxy_redirect     off;
+#	   proxy_set_header   Host $host;
+
+
+            location /cap {
+                   proxy_pass  http://my_backend;
+                access_by_lua_block {
+                    local res = ngx.location.capture("/a")
+                    if res.status == ngx.HTTP_OK then
+                        return "a2"
+                    end
+                    if res.status == ngx.HTTP_FORBIDDEN then ngx.exit(res.status)
+                    end
+                    ngx.exit(ngx.HTTP_INTERNAL_SERVER_ERROR)
+                }
+             }
+          location /l {
+		   rewrite ^(/l.*)$ /a last;     
+           }
+          location /a {
+		   rewrite ^(/a.*)$ /a break;    
+           }
+          location /b {
+		   rewrite ^(/b.*)$ /a break;    
+           }
+          location /noredirectb {
+		   rewrite ^(/noredirect.*)$ /a$request_uri break;
+                   proxy_pass  http://my_backend;
+
+           }
+          location /noredirectl {
+		   rewrite ^(/noredirect.*)$ /b last;
+                   proxy_pass  http://my_backend;
+           }
+          location /noredirectp {
+		   rewrite ^(/noredirect.*)$ /a$request_uri permanent;
+                   proxy_pass  http://my_backend;
+           }
+          location /noredirecth {
+		  # http://192.168.56.105/a/
+		   rewrite ^(/noredirect.*)$ http://192.168.56.105/a$request_uri;
+#                   proxy_pass  http://my_backend;
+           }
+          location /noredirect {
+		   rewrite ^(/noredirect.*)$ /a$request_uri; 
+                   proxy_pass  http://my_backend;
+
+		     proxy_redirect     off;
+		       proxy_set_header   Host $host;
+           }
+          location /g {
+		      return 301 $scheme://google.com$request_uri;
+           }
+
+    location ~ /user/kamo/ {
+        rewrite ^/user/kamo/(.*)/$ /user/kamo_test.php?W=$1;
+    }
+
+       location /test { 
+           rewrite_by_lua_block {
+                   #local uri = ngx.re.sub(ngx.var.uri, ".*", "/a", "o");
+                     #ngx.req.set_uri(uri);
+                   ngx.req.set_uri("/a", true );
+           }
+       }
+
+       location /hello {
+           default_type text/html;
+           content_by_lua_block {
+               ngx.say("<p>Hello World</p>");
+#                ngx.say(ngx.req.start_time);
+
+           }
+       }
+
+       location /myfile {
+           default_type text/html;
+           content_by_lua_file ./lua/hello_world.lua; 
+       }
+
+
+
+#       location /  {
+#       }
+    }
+}
